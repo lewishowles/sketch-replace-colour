@@ -12,16 +12,18 @@ if (selectedCount == 0) {
 
 	var newColour = doc.askForUserInput_initialValue('New hex (to replace ' + startingColour + ')', '');
 
-	// Loop through all pages, artboards, layers
-	for (var i = 0; i < doc.pages().count(); i++) {
-		var page = doc.pages().objectAtIndex(i);
+	if (newColour != undefined) {
+		// Loop through all pages, artboards, layers
+		for (var i = 0; i < doc.pages().count(); i++) {
+			var page = doc.pages().objectAtIndex(i);
 
-		for (var j = 0; j < page.artboards().count(); j++) {
-			var artboard = page.artboards().objectAtIndex(j);
+			for (var j = 0; j < page.artboards().count(); j++) {
+				var artboard = page.artboards().objectAtIndex(j);
 
-			for (var k = 0; k < artboard.layers().count(); k++) {
-				var layer = artboard.layers().objectAtIndex(k);
-				checkLayer(layer);
+				for (var k = 0; k < artboard.layers().count(); k++) {
+					var layer = artboard.layers().objectAtIndex(k);
+					checkLayer(layer);
+				}
 			}
 		}
 	}
