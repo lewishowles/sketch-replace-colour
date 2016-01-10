@@ -1,0 +1,99 @@
+var onRun = function(context) {
+  var doc            = context.document;
+var selectedLayers = context.selection;
+var selectedCount  = selectedLayers.count();
+
+// Plugin requires a selection to determine the starting colour
+if (selectedCount == 0) {
+	doc.displayMessage('No layer selected');
+} else {
+	var colour = getColour(selectedLayers.firstObject());
+	var startingColour = "#" + colour.hexValue();
+
+	var newColour = doc.askForUserInput_initialValue('New hex (to replace ' + startingColour + ')', '');
+
+	// Loop through all pages, artboards, layers
+	for (var i = 0; i < doc.pages().count(); i++) {
+		var page = doc.pages().objectAtIndex(i);
+
+		for (var j = 0; j < page.artboards().count(); j++) {
+			var artboard = page.artboards().objectAtIndex(j);
+
+			for (var k = 0; k < artboard.layers().count(); k++) {
+				var layer = artboard.layers().objectAtIndex(k);
+				checkLayer(layer);
+			}
+		}
+	}
+}
+
+/**
+ * Check if a layer's colour matches the colour of the originally selected layer
+ * @param  {MSLayer} layer The layer whose colour we are comparing
+ * @return null
+ */
+function checkLayer(layer) {
+	var layerType = layer.class();
+
+	if (layerType == MSLayerGroup) {
+		for (var i = 0; i < layer.layers().count(); i++) {
+			checkLayer(layer.layers().objectAtIndex(i));
+		}
+	} else if (layerType == MSShapeGroup || layerType == MSTextLayer) {
+		var colour = getColour(layer);
+
+		if (colour != undefined) {
+			var hexColour = '#' + colour.hexValue();
+
+			if (hexColour == startingColour) {
+				setColour(layer, layerType, newColour);
+			}
+		}
+	}
+}
+
+/**
+ * Set the fill or text colour of a layer to the newly specified colour
+ * @param {MSLayer}     layer     The layer whose colour to set
+ * @param {MSLayerType} layerType The type of layer
+ */
+function setColour(layer, layerType, colour) {
+	if (layerType == MSShapeGroup) {
+		var fill = layer.style().fills().firstObject();
+		fill.color = MSColor.colorWithSVGString(colour);
+	} else {
+		layer.textColor = MSColor.colorWithSVGString(colour);
+	}
+}
+
+/**
+ * Get the fill or text colour of the given layer
+ * @param  {MSLayer} layer The layer whose colour to get
+ * @return {MSColor}       The fill or text colour of the layer
+ */
+function getColour(layer) {
+	var colour = null;
+
+	switch (layer.class()) {
+		case MSTextLayer:
+			// If this is a text layer, get the text colour
+			colour = layer.textColor();
+
+			// If the layer also has a fill, use this as the primary colour
+			var fill = layer.style().fills().firstObject();
+			if (fill != undefined && fill.isEnabled()) {
+				colour = fill.color();
+			}
+		break;
+		default:
+			var fill = layer.style().fills().firstObject();
+
+			if (fill != undefined && fill.isEnabled()) {
+				colour = fill.color();
+			}
+		break;
+	}
+
+	return colour;
+}
+};
