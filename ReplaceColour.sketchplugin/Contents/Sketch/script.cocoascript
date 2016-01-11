@@ -1,101 +1,288 @@
 var onRun = function(context) {
-  var doc            = context.document;
-var selectedLayers = context.selection;
-var selectedCount  = selectedLayers.count();
+	var doc            = context.document;
+	var selectedLayers = context.selection;
+	var selectedCount  = selectedLayers.count();
 
-// Plugin requires a selection to determine the starting colour
-if (selectedCount == 0) {
-	doc.displayMessage('No layer selected');
-} else {
-	var colour = getColour(selectedLayers.firstObject());
-	var startingColour = "#" + colour.hexValue();
+	// Plugin requires a selection to determine the starting colour
+	if (selectedCount == 0) {
+		doc.displayMessage('No layer selected');
+	} else {
+		var selectedLayer     = getSelectedLayer(selectedLayers.firstObject());
+		var originalFill      = selectedLayer.style().fills().firstObject();
+		var originalBorder    = selectedLayer.style().borders().firstObject();
+		var selectedLayerType = getLayerType(selectedLayer);
+		var colour            = null;
+		var alert             = buildDialog(selectedLayer, selectedLayerType);
+    	var options           = handleAlertResponse(alert, alert.runModal(), selectedLayerType);
 
-	var newColour = doc.askForUserInput_initialValue('New hex (to replace ' + startingColour + ')', '');
+		if (colour == null) {
+			colour = getColour(selectedLayer, options.layerProperty);
+		}
 
-	if (newColour != undefined) {
-		// Loop through all pages, artboards, layers
-		for (var i = 0; i < doc.pages().count(); i++) {
-			var page = doc.pages().objectAtIndex(i);
 
-			for (var j = 0; j < page.artboards().count(); j++) {
-				var artboard = page.artboards().objectAtIndex(j);
+		var startingColour = "#" + colour.hexValue();
+		var newColour      = options.colour;
 
-				for (var k = 0; k < artboard.layers().count(); k++) {
-					var layer = artboard.layers().objectAtIndex(k);
-					checkLayer(layer);
+		if (newColour != undefined) {
+			// Loop through all pages, artboards, layers
+			for (var i = 0; i < doc.pages().count(); i++) {
+				var page = doc.pages().objectAtIndex(i);
+
+				for (var j = 0; j < page.artboards().count(); j++) {
+					var artboard = page.artboards().objectAtIndex(j);
+
+					for (var k = 0; k < artboard.layers().count(); k++) {
+						var layer = artboard.layers().objectAtIndex(k);
+						checkLayer(layer, options);
+					}
 				}
 			}
 		}
 	}
-}
 
-/**
- * Check if a layer's colour matches the colour of the originally selected layer
- * @param  {MSLayer} layer The layer whose colour we are comparing
- * @return null
- */
-function checkLayer(layer) {
-	var layerType = layer.class();
+	/**
+	 * Ensure that the selected layer is not a group - if so, find its first child
+	 * @param  {NSLayer} selectedLayer The layer selected at run time
+	 * @return {NSLayer}               The layer selected, or the first child if a group
+	 */
+	function getSelectedLayer(selectedLayer) {
+		var selectedLayerType = getLayerType(selectedLayer);
 
-	if (layerType == MSLayerGroup) {
-		for (var i = 0; i < layer.layers().count(); i++) {
-			checkLayer(layer.layers().objectAtIndex(i));
+		if (selectedLayerType == MSLayerGroup) {
+			return getSelectedLayer(selectedLayer.layers().firstObject());
+		} else {
+			return selectedLayer;
 		}
-	} else if (layerType == MSShapeGroup || layerType == MSTextLayer) {
-		var colour = getColour(layer);
+	}
 
-		if (colour != undefined) {
-			var hexColour = '#' + colour.hexValue();
+	/**
+	 * Retrieve the layer class of the chosen layer
+	 * @param  {NSLayer} selectedLayer The layer to query
+	 * @return {String}                The type of layer
+	 */
+	function getLayerType(selectedLayer) {
+    	return selectedLayer.class();
+	}
 
-			if (hexColour == startingColour) {
-				setColour(layer, layerType, newColour);
+	/**
+	 * Build dialog window with appropriate options
+	 * @param  {NSLayer}        selectedLayer     The layer selected at run time
+	 * @param  {NSLayer}        selectedLayerType The layer type of the layer selected at run time
+	 * @return {COSAlertWindow}                   The alert window requesting input
+	 */
+    function buildDialog(selectedLayer, selectedLayerType) {
+    	var alert = COSAlertWindow.new();
+
+		alert.setMessageText('Find & Replace Colour');
+
+		// Only provide the property option if this is a shape and it has both a fill and a border
+		if (selectedLayerType == MSShapeGroup) {
+			if (originalFill != undefined && originalBorder != undefined) {
+				alert.setInformativeText('Select the property containing the colour to replace, enter a replacement colour, and choose which properties to update.');
+
+				var fillColour = getColour(selectedLayer, 'Fill');
+				var borderColour = getColour(selectedLayer, 'Border');
+				var choosePropertyOptions = ['Fill (#' + fillColour.hexValue() + ')', 'Border (#' + borderColour.hexValue() + ')'];
+				var choosePropertySelect  = createSelect(choosePropertyOptions, 0);
+
+				alert.addAccessoryView(choosePropertySelect);
+			} else if (originalFill != undefined && originalBorder == undefined) {
+				colour = getColour(selectedLayer, 'Fill');
+				alert.setInformativeText('You will be replacing the Fill colour (#' + colour.hexValue() + ') of this layer.');
+			} else if (originalFill == undefined && originalBorder != undefined) {
+				colour = getColour(selectedLayer, 'Border');
+				alert.setInformativeText('You will be replacing the Border colour (#' + colour.hexValue() + ') of this layer.');
 			}
+		} else {
+			colour = getColour(selectedLayer, 'Text');
+			alert.setInformativeText('You will be replacing the Text colour (#' + colour.hexValue() + ') of this layer.');
 		}
+
+		alert.addTextLabelWithValue('What is your new colour?');
+		alert.addTextFieldWithValue('#');
+
+		alert.addTextLabelWithValue('What should we update on other layers?');
+
+		var propertyOptions = ['All', 'Fill', 'Border', 'Text'];
+		var propertySelect  = createSelect(propertyOptions, 0);
+		alert.addAccessoryView(propertySelect);
+
+		alert.addButtonWithTitle('OK');
+		alert.addButtonWithTitle('Cancel');
+
+		return alert;
+    }
+
+	/**
+	 * Create Select Box
+	 * @param  {Array}      options           Options for the select
+	 * @param  {Int}        selectedItemIndex Default selected item
+	 * @return {NSComboBox}                   Complete select box
+	 */
+	function createSelect(options, selectedItemIndex) {
+		selectedItemIndex = selectedItemIndex || 0;
+
+		var select = NSComboBox.alloc().initWithFrame(NSMakeRect(0,0,200,25));
+		select.addItemsWithObjectValues(options);
+		select.selectItemAtIndex(selectedItemIndex);
+
+		return select;
 	}
-}
 
-/**
- * Set the fill or text colour of a layer to the newly specified colour
- * @param {MSLayer}     layer     The layer whose colour to set
- * @param {MSLayerType} layerType The type of layer
- */
-function setColour(layer, layerType, colour) {
-	if (layerType == MSShapeGroup) {
-		var fill = layer.style().fills().firstObject();
-		fill.color = MSColor.colorWithSVGString(colour);
-	} else {
-		layer.textColor = MSColor.colorWithSVGString(colour);
-	}
-}
+	/**
+	 * Collect user input from alert window
+	 * @param  {COSAlertWindow} alert             The alert window
+	 * @param  {Int}            responseCode      Alert window response code
+	 * @param  {String}         selectedLayerType Class of the originally selected layer
+	 * @return {Object}                           Alert window results
+	 */
+	function handleAlertResponse(alert, responseCode, selectedLayerType) {
+	    if (responseCode == "1000") {
+			if (selectedLayerType == MSShapeGroup) {
+				if (originalFill != undefined && originalBorder != undefined) {
+					// 0 = Property Select
+					// 1 = Label
+					// 2 = Text Input
+					// 3 = Label
+					// 4 = Property Select
+			        return {
+			        	layerProperty       : alert.viewAtIndex(0).stringValue(),
+			        	colour              : alert.viewAtIndex(2).stringValue(),
+			        	replacementProperty : alert.viewAtIndex(4).stringValue()
+			        };
+				} else if (originalFill != undefined && originalBorder == undefined) {
+					// 0 = Label
+					// 1 = Text Input
+					// 2 = Label
+					// 3 = Property Select
+			        return {
+			        	layerProperty       : 'Fill',
+			        	colour              : alert.viewAtIndex(1).stringValue(),
+						replacementProperty : alert.viewAtIndex(3).stringValue()
+			        };
+				} else if (originalFill == undefined && originalBorder != undefined) {
+					// 0 = Label
+					// 1 = Text Input
+					// 2 = Label
+					// 3 = Property Select
+			        return {
+			        	layerProperty       : 'Border',
+			        	colour              : alert.viewAtIndex(1).stringValue(),
+			        	replacementProperty : alert.viewAtIndex(3).stringValue()
+			        };
+				}
+			} else {
+				// 0 = Label
+				// 1 = Text Input
+				// 2 = Label
+				// 3 = Property Select
+				return {
+					layerProperty       : 'Text',
+		        	colour              : alert.viewAtIndex(1).stringValue(),
+		        	replacementProperty : alert.viewAtIndex(3).stringValue()
+		        };
+			}
+	    }
 
-/**
- * Get the fill or text colour of the given layer
- * @param  {MSLayer} layer The layer whose colour to get
- * @return {MSColor}       The fill or text colour of the layer
- */
-function getColour(layer) {
-	var colour = null;
+    	return null;
+    }
 
-	switch (layer.class()) {
-		case MSTextLayer:
+	/**
+	 * Get the fill, text or border colour of the given layer
+	 * @param  {MSLayer} layer   The layer whose colour to get
+	 * @param  {Object}  options User-specified options
+	 * @return {MSColor}         The fill or text colour of the layer
+	 */
+	function getColour(layer, layerProperty) {
+		var colour = null;
+
+		if (layerProperty == 'Text') {
 			// If this is a text layer, get the text colour
 			colour = layer.textColor();
 
 			// If the layer also has a fill, use this as the primary colour
 			var fill = layer.style().fills().firstObject();
+
 			if (fill != undefined && fill.isEnabled()) {
 				colour = fill.color();
 			}
-		break;
-		default:
+		} else if (layerProperty == 'Fill') {
 			var fill = layer.style().fills().firstObject();
 
 			if (fill != undefined && fill.isEnabled()) {
 				colour = fill.color();
 			}
-		break;
+		} else if (layerProperty == 'Border') {
+			var border = layer.style().borders().firstObject();
+
+			if (border != undefined && border.isEnabled()) {
+				colour = border.color();
+			}
+		}
+
+		return colour;
 	}
 
-	return colour;
-}
+	/**
+	 * Check if a layer's colour matches the colour of the originally selected layer
+	 * @param  {MSLayer} layer The layer whose colour we are comparing
+	 * @return null
+	 */
+	function checkLayer(layer, options) {
+		var layerType = layer.class();
+		var replacementProperty = options.replacementProperty;
+
+		if (layerType == MSLayerGroup) {
+			for (var i = 0; i < layer.layers().count(); i++) {
+				checkLayer(layer.layers().objectAtIndex(i), options);
+			}
+		} else {
+			if (layerType == MSShapeGroup) {
+				if (replacementProperty == 'Fill' || replacementProperty == 'All') {
+					setColour(layer, layerType, 'Fill', newColour);
+				}
+
+				if (replacementProperty == 'Border' || replacementProperty == 'All') {
+					setColour(layer, layerType, 'Border', newColour);
+				}
+			} else if (layerType == MSTextLayer && (replacementProperty == 'Text' || replacementProperty == 'All')) {
+				setColour(layer, layerType, 'Text', newColour);
+			}
+		}
+	}
+
+	/**
+	 * Set the fill or text colour of a layer to the newly specified colour
+	 * @param {MSLayer}     layer     The layer whose colour to set
+	 * @param {MSLayerType} layerType The type of layer
+	 */
+	function setColour(layer, layerType, replacementProperty, colour) {
+		var colour = getColour(layer, replacementProperty);
+
+		if (colour != undefined) {
+			var hexColour = '#' + colour.hexValue();
+
+			if (hexColour == startingColour) {
+				if (layerType == MSShapeGroup) {
+					if (replacementProperty == 'Fill') {
+						var fill = layer.style().fills().firstObject();
+
+						if (fill != undefined) {
+							fill.color = MSColor.colorWithSVGString(newColour);
+						}
+					}
+
+					if (replacementProperty == 'Border') {
+						var border = layer.style().borders().firstObject();
+
+						if (border != undefined) {
+							border.color = MSColor.colorWithSVGString(newColour);
+						}
+					}
+				} else {
+					layer.textColor = MSColor.colorWithSVGString(newColour);
+				}
+			}
+		}
+	}
 };

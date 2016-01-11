@@ -16,7 +16,7 @@
     "title" : "Replace Colour"
   },
   "identifier" : "com.example.sketch.845bc9b1-ac46-43f0-9163-2b6de0b7fbd1",
-  "version" : "1.0",
+  "version" : "2.0",
   "description" : "Replace all fill or text colours matching the selected layer's colour with the specified hex",
   "authorEmail" : "",
   "name" : "Sketch Replace Colour"
