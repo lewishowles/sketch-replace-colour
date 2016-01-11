@@ -80,9 +80,7 @@ var onRun = function(context) {
 			if (originalFill != undefined && originalBorder != undefined) {
 				alert.setInformativeText('Select the property containing the colour to replace, enter a replacement colour, and choose which properties to update.');
 
-				var fillColour = getColour(selectedLayer, 'Fill');
-				var borderColour = getColour(selectedLayer, 'Border');
-				var choosePropertyOptions = ['Fill (#' + fillColour.hexValue() + ')', 'Border (#' + borderColour.hexValue() + ')'];
+				var choosePropertyOptions = ['Fill', 'Border'];
 				var choosePropertySelect  = createSelect(choosePropertyOptions, 0);
 
 				alert.addAccessoryView(choosePropertySelect);
