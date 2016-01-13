@@ -27,3 +27,16 @@ If the layer is a text layer, its colour will be chosen. If the text layer also 
 If a shape layer has both a fill and border specified, you will be asked to clarify which you'd like to use.
 
 ![Sketch Replace Colour requesting clarification for which property to take the initial colour from, and asking for a replacement colour and which properties of other layers to update](/ReplaceColour.sketchplugin/Contents/Resources/take-your-pick.png?raw=true)
+
+## Installation
+
+1. Download and unzip Sketch Bound with Box.
+2. Double click `ReplaceColour.sketchplugin` for auto installation.
+
+*or*
+
+Find in [SketchToolbox](http://sketchtoolbox.com/)
+
+## Like it? Great!
+
+If you find this plugin useful, consider [buying me a Pepsi Max](https://paypal.me/howles/5) (it's just tastier than coffee!)
