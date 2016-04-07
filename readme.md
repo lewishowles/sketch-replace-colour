@@ -30,7 +30,7 @@ If a shape layer has both a fill and border specified, you will be asked to clar
 
 ## Installation
 
-1. Download and unzip Sketch Bound with Box.
+1. Download and unzip Sketch Replace Colour.
 2. Double click `ReplaceColour.sketchplugin` for auto installation.
 
 *or*
