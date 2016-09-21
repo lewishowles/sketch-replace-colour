@@ -19,7 +19,6 @@ var onRun = function(context) {
 			colour = getColour(selectedLayer, options.layerProperty);
 		}
 
-
 		var startingColour = "#" + colour.hexValue();
 		var newColour      = options.colour;
 
@@ -30,11 +29,15 @@ var onRun = function(context) {
 
 				for (var j = 0; j < page.artboards().count(); j++) {
 					var artboard = page.artboards().objectAtIndex(j);
-
 					for (var k = 0; k < artboard.layers().count(); k++) {
 						var layer = artboard.layers().objectAtIndex(k);
 						checkLayer(layer, options);
 					}
+				}
+
+				for (var j = 0; j < page.layers().count(); j++) {
+					var layer = page.layers().objectAtIndex(j);
+					checkLayer(layer, options);
 				}
 			}
 		}
@@ -119,11 +122,11 @@ var onRun = function(context) {
 	 */
 	function createSelect(options, selectedItemIndex) {
 		selectedItemIndex = selectedItemIndex || 0;
-
 		var select = NSComboBox.alloc().initWithFrame(NSMakeRect(0,0,200,25));
+		select.i18nObjectValues = options;
+		select.setEditable(false);
 		select.addItemsWithObjectValues(options);
 		select.selectItemAtIndex(selectedItemIndex);
-
 		return select;
 	}
 
@@ -144,9 +147,9 @@ var onRun = function(context) {
 					// 3 = Label
 					// 4 = Property Select
 			        return {
-			        	layerProperty       : alert.viewAtIndex(0).stringValue(),
+			        	layerProperty       : alert.viewAtIndex(0).i18nObjectValues[alert.viewAtIndex(0).indexOfSelectedItem()],
 			        	colour              : alert.viewAtIndex(2).stringValue(),
-			        	replacementProperty : alert.viewAtIndex(4).stringValue()
+			        	replacementProperty : alert.viewAtIndex(4).i18nObjectValues[alert.viewAtIndex(4).indexOfSelectedItem()]
 			        };
 				} else if (originalFill != undefined && originalBorder == undefined) {
 					// 0 = Label
@@ -156,7 +159,7 @@ var onRun = function(context) {
 			        return {
 			        	layerProperty       : 'Fill',
 			        	colour              : alert.viewAtIndex(1).stringValue(),
-						replacementProperty : alert.viewAtIndex(3).stringValue()
+						replacementProperty : alert.viewAtIndex(3).i18nObjectValues[alert.viewAtIndex(3).indexOfSelectedItem()]
 			        };
 				} else if (originalFill == undefined && originalBorder != undefined) {
 					// 0 = Label
@@ -166,7 +169,7 @@ var onRun = function(context) {
 			        return {
 			        	layerProperty       : 'Border',
 			        	colour              : alert.viewAtIndex(1).stringValue(),
-			        	replacementProperty : alert.viewAtIndex(3).stringValue()
+			        	replacementProperty : alert.viewAtIndex(3).i18nObjectValues[alert.viewAtIndex(3).indexOfSelectedItem()]
 			        };
 				}
 			} else {
@@ -177,7 +180,7 @@ var onRun = function(context) {
 				return {
 					layerProperty       : 'Text',
 		        	colour              : alert.viewAtIndex(1).stringValue(),
-		        	replacementProperty : alert.viewAtIndex(3).stringValue()
+		        	replacementProperty : alert.viewAtIndex(3).i18nObjectValues[alert.viewAtIndex(3).indexOfSelectedItem()]
 		        };
 			}
 	    }
