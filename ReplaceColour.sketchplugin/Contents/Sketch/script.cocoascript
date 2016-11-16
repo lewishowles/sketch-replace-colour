@@ -7,64 +7,46 @@ var onRun = function(context) {
 	if (selectedCount == 0) {
 		doc.displayMessage('No layer selected');
 	} else {
+		// Settings
 		var selectedLayer     = getSelectedLayer(selectedLayers.firstObject());
 		var originalFill      = selectedLayer.style().fills().firstObject();
 		var originalBorder    = selectedLayer.style().borders().firstObject();
 		var selectedLayerType = getLayerType(selectedLayer);
-		var colour            = null;
+
+		// Options window
 		var alert             = buildDialog(selectedLayer, selectedLayerType);
-    	var options           = handleAlertResponse(alert, alert.runModal(), selectedLayerType);
+    	var options           = handleAlertResponse(alert, alert.runModal(), selectedLayerType, originalFill, originalBorder);
 
-		if (colour == null) {
-			colour = getColour(selectedLayer, options.layerProperty);
-		}
+		// Colours
+		var colour            = getColour(selectedLayer, options.layerProperty);
+		var originalColour    = "#" + colour.hexValue();
+		var replacementColour = options.colour;
 
-		var startingColour = "#" + colour.hexValue();
-		var newColour      = options.colour;
-
-		if (newColour != undefined) {
-			// Loop through all pages, artboards, layers
+		if (replacementColour != undefined) {
+			// All pages
 			for (var i = 0; i < doc.pages().count(); i++) {
 				var page = doc.pages().objectAtIndex(i);
 
+				// All artboards
 				for (var j = 0; j < page.artboards().count(); j++) {
 					var artboard = page.artboards().objectAtIndex(j);
+
+					// All layers inside artboard
 					for (var k = 0; k < artboard.layers().count(); k++) {
 						var layer = artboard.layers().objectAtIndex(k);
-						checkLayer(layer, options);
+
+						checkLayer(layer, options, originalColour);
 					}
 				}
 
+				// All layers inside page
 				for (var j = 0; j < page.layers().count(); j++) {
 					var layer = page.layers().objectAtIndex(j);
-					checkLayer(layer, options);
+
+					checkLayer(layer, options, originalColour);
 				}
 			}
 		}
-	}
-
-	/**
-	 * Ensure that the selected layer is not a group - if so, find its first child
-	 * @param  {NSLayer} selectedLayer The layer selected at run time
-	 * @return {NSLayer}               The layer selected, or the first child if a group
-	 */
-	function getSelectedLayer(selectedLayer) {
-		var selectedLayerType = getLayerType(selectedLayer);
-
-		if (selectedLayerType == MSLayerGroup) {
-			return getSelectedLayer(selectedLayer.layers().firstObject());
-		} else {
-			return selectedLayer;
-		}
-	}
-
-	/**
-	 * Retrieve the layer class of the chosen layer
-	 * @param  {NSLayer} selectedLayer The layer to query
-	 * @return {String}                The type of layer
-	 */
-	function getLayerType(selectedLayer) {
-    	return selectedLayer.class();
 	}
 
 	/**
@@ -78,9 +60,10 @@ var onRun = function(context) {
 
 		alert.setMessageText('Find & Replace Colour');
 
-		// Only provide the property option if this is a shape and it has both a fill and a border
 		if (selectedLayerType == MSShapeGroup) {
+			// Shape layer
 			if (originalFill != undefined && originalBorder != undefined) {
+				// Only provide the property option if this is a shape and it has both a fill and a border
 				alert.setInformativeText('Select the property containing the colour to replace, enter a replacement colour, and choose which properties to update.');
 
 				var choosePropertyOptions = ['Fill', 'Border'];
@@ -88,13 +71,16 @@ var onRun = function(context) {
 
 				alert.addAccessoryView(choosePropertySelect);
 			} else if (originalFill != undefined && originalBorder == undefined) {
+				// Replacing fill
 				colour = getColour(selectedLayer, 'Fill');
 				alert.setInformativeText('You will be replacing the Fill colour (#' + colour.hexValue() + ') of this layer.');
 			} else if (originalFill == undefined && originalBorder != undefined) {
+				// Replacing border
 				colour = getColour(selectedLayer, 'Border');
 				alert.setInformativeText('You will be replacing the Border colour (#' + colour.hexValue() + ') of this layer.');
 			}
 		} else {
+			// Text layer
 			colour = getColour(selectedLayer, 'Text');
 			alert.setInformativeText('You will be replacing the Text colour (#' + colour.hexValue() + ') of this layer.');
 		}
@@ -115,19 +101,84 @@ var onRun = function(context) {
     }
 
 	/**
-	 * Create Select Box
+	 * Create Select Box for dialog windows
 	 * @param  {Array}      options           Options for the select
 	 * @param  {Int}        selectedItemIndex Default selected item
 	 * @return {NSComboBox}                   Complete select box
 	 */
 	function createSelect(options, selectedItemIndex) {
 		selectedItemIndex = selectedItemIndex || 0;
+
 		var select = NSComboBox.alloc().initWithFrame(NSMakeRect(0,0,200,25));
 		select.i18nObjectValues = options;
 		select.setEditable(false);
 		select.addItemsWithObjectValues(options);
 		select.selectItemAtIndex(selectedItemIndex);
+
 		return select;
+	}
+
+	/**
+	 * Get the requested style (fill, border, text) colour of the given layer
+	 * @param  {MSLayer} layer         The layer whose colour to get
+	 * @param  {Object}  layerProperty The style colour to fetch
+	 * @return {MSColor}               The selected layer colour
+	 */
+	function getColour(layer, layerProperty) {
+		var colour = null;
+
+		if (layerProperty == 'Text') {
+			colour = layer.textColor();
+
+			// If the text layer also has a fill, use this as the primary colour
+			var fill = layer.style().fills().firstObject();
+
+			if (fill != undefined && fill.isEnabled()) {
+				colour = fill.color();
+			}
+		} else if (layerProperty == 'Fill') {
+			var fill = layer.style().fills().firstObject();
+
+			if (fill != undefined && fill.isEnabled()) {
+				colour = fill.color();
+			}
+		} else if (layerProperty == 'Border') {
+			var border = layer.style().borders().firstObject();
+
+			if (border != undefined && border.isEnabled()) {
+				colour = border.color();
+			}
+		}
+
+		if (colour != null) {
+			colour = colour.immutableModelObject();
+		}
+
+		return colour;
+	}
+
+	/**
+	 * Retrieve the layer class of the chosen layer
+	 * @param  {NSLayer} selectedLayer The layer to query
+	 * @return {String}                The type of layer
+	 */
+	function getLayerType(selectedLayer) {
+    	return selectedLayer.class();
+	}
+
+	/**
+	 * If the selected layer is a group, get its first child, and return a single layer
+	 * @param  {NSLayer} selectedLayer The layer selected at run time
+	 * @return {NSLayer}               The layer selected, or the first child if a group
+	 */
+	function getSelectedLayer(selectedLayer) {
+		var selectedLayerType = getLayerType(selectedLayer);
+
+		if (selectedLayerType == MSLayerGroup) {
+			return getSelectedLayer(selectedLayer.layers().firstObject());
+		} else {
+			return selectedLayer;
+		}
 	}
 
 	/**
@@ -137,9 +188,10 @@ var onRun = function(context) {
 	 * @param  {String}         selectedLayerType Class of the originally selected layer
 	 * @return {Object}                           Alert window results
 	 */
-	function handleAlertResponse(alert, responseCode, selectedLayerType) {
+	function handleAlertResponse(alert, responseCode, selectedLayerType, originalFill, originalBorder) {
 	    if (responseCode == "1000") {
 			if (selectedLayerType == MSShapeGroup) {
+				// Shape layer
 				if (originalFill != undefined && originalBorder != undefined) {
 					// 0 = Property Select
 					// 1 = Label
@@ -173,6 +225,7 @@ var onRun = function(context) {
 			        };
 				}
 			} else {
+				// Text layer
 				// 0 = Label
 				// 1 = Text Input
 				// 2 = Label
@@ -189,87 +242,84 @@ var onRun = function(context) {
     }
 
 	/**
-	 * Get the fill, text or border colour of the given layer
-	 * @param  {MSLayer} layer   The layer whose colour to get
-	 * @param  {Object}  options User-specified options
-	 * @return {MSColor}         The fill or text colour of the layer
-	 */
-	function getColour(layer, layerProperty) {
-		var colour = null;
-
-		if (layerProperty == 'Text') {
-			// If this is a text layer, get the text colour
-			colour = layer.textColor();
-
-			// If the layer also has a fill, use this as the primary colour
-			var fill = layer.style().fills().firstObject();
-
-			if (fill != undefined && fill.isEnabled()) {
-				colour = fill.color();
-			}
-		} else if (layerProperty == 'Fill') {
-			var fill = layer.style().fills().firstObject();
-
-			if (fill != undefined && fill.isEnabled()) {
-				colour = fill.color();
-			}
-		} else if (layerProperty == 'Border') {
-			var border = layer.style().borders().firstObject();
-
-			if (border != undefined && border.isEnabled()) {
-				colour = border.color();
-			}
-		}
-
-		return colour.immutableModelObject();
-	}
-
-	/**
 	 * Check if a layer's colour matches the colour of the originally selected layer
 	 * @param  {MSLayer} layer The layer whose colour we are comparing
 	 * @return null
 	 */
-	function checkLayer(layer, options) {
-		var layerType = layer.class();
+	function checkLayer(layer, options, originalColour) {
+		var layerType           = layer.class();
 		var replacementProperty = options.replacementProperty;
 
 		if (layerType == MSLayerGroup) {
+			// Apply to all layers in a group
 			for (var i = 0; i < layer.layers().count(); i++) {
-				checkLayer(layer.layers().objectAtIndex(i), options);
+				checkLayer(layer.layers().objectAtIndex(i), options, originalColour);
 			}
 		} else {
 			if (layerType == MSShapeGroup) {
+				// Set fill
 				if (replacementProperty == 'Fill' || replacementProperty == 'All') {
-					setColour(layer, layerType, 'Fill', newColour);
+					setColour(layer, layerType, 'Fill', replacementColour, originalColour);
 				}
 
+				// Set border
 				if (replacementProperty == 'Border' || replacementProperty == 'All') {
-					setColour(layer, layerType, 'Border', newColour);
+					setColour(layer, layerType, 'Border', replacementColour, originalColour);
 				}
 			} else if (layerType == MSTextLayer && (replacementProperty == 'Text' || replacementProperty == 'All')) {
-				setColour(layer, layerType, 'Text', newColour);
+				// Set text colour
+				setColour(layer, layerType, 'Text', replacementColour, originalColour);
 			}
 		}
 	}
 
 	/**
+     * Convert hex string into RGBA
+     * @param  {string} hexColor Hex Colour (with or without #)
+     * @return {object}          Converted RGB values.
+     */
+    function hexToRgba(hex) {
+    	var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+
+		if (result) {
+			result = {
+	        	r : parseInt(result[1], 16),
+	        	g : parseInt(result[2], 16),
+	        	b : parseInt(result[3], 16),
+				a : 1
+	        };
+		} else {
+			result = null;
+		}
+
+		return result;
+    }
+
+	/**
 	 * Set the fill or text colour of a layer to the newly specified colour
-	 * @param {MSLayer}     layer     The layer whose colour to set
-	 * @param {MSLayerType} layerType The type of layer
+	 * @param {MSLayer}     layer               The layer whose colour to set
+	 * @param {MSLayerType} layerType           The type of layer
+	 * @param {string}      replacementProperty The property to replace
+	 * @param {string}      replacementColour   The new colour to use
+	 * @param {string}      originalColour      The original colour to replace
 	 */
-	function setColour(layer, layerType, replacementProperty, colour) {
-		var colour = getColour(layer, replacementProperty);
+	function setColour(layer, layerType, replacementProperty, replacementColour, originalColour) {
+		var layerColour = getColour(layer, replacementProperty);
 
-		if (colour != undefined) {
-			var hexColour = '#' + colour.hexValue();
+		replacementColour = hexToRgba(replacementColour);
 
-			if (hexColour == startingColour) {
+		if (layerColour != undefined && replacementColour != null) {
+			var hexColour = '#' + layerColour.hexValue();
+
+			if (hexColour == originalColour) {
+				// Matching item to update
 				if (layerType == MSShapeGroup) {
+					// Shape
 					if (replacementProperty == 'Fill') {
 						var fill = layer.style().fills().firstObject();
 
 						if (fill != undefined) {
-							fill.color = MSColor.colorWithSVGString(newColour);
+							fill.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r, replacementColour.g, replacementColour.b, replacementColour.a);
 						}
 					}
 
@@ -277,11 +327,11 @@ var onRun = function(context) {
 						var border = layer.style().borders().firstObject();
 
 						if (border != undefined) {
-							border.color = MSColor.colorWithSVGString(newColour);
+							border.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r, replacementColour.g, replacementColour.b, replacementColour.a);
 						}
 					}
 				} else {
-					layer.textColor = MSColor.colorWithSVGString(newColour);
+					layer.textColor = MSColor.colorWithRed_green_blue_alpha(replacementColour.r, replacementColour.g, replacementColour.b, replacementColour.a);
 				}
 			}
 		}
