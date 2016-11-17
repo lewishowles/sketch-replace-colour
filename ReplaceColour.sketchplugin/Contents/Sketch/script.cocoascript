@@ -7,13 +7,11 @@ var onRun = function(context) {
 	if (selectedCount == 0) {
 		doc.displayMessage('No layer selected');
 	} else {
-		// Settings
+		// Options window
 		var selectedLayer     = getSelectedLayer(selectedLayers.firstObject());
+		var selectedLayerType = selectedLayer.class();
 		var originalFill      = selectedLayer.style().fills().firstObject();
 		var originalBorder    = selectedLayer.style().borders().firstObject();
-		var selectedLayerType = getLayerType(selectedLayer);
-
-		// Options window
 		var alert             = buildDialog(selectedLayer, selectedLayerType);
     	var options           = handleAlertResponse(alert, alert.runModal(), selectedLayerType, originalFill, originalBorder);
 
@@ -23,25 +21,29 @@ var onRun = function(context) {
 		var replacementColour = options.colour;
 
 		if (replacementColour != undefined) {
+			var i;
+			var j;
+			var layer;
+
 			// All pages
-			for (var i = 0; i < doc.pages().count(); i++) {
+			for (i = 0; i < doc.pages().count(); i++) {
 				var page = doc.pages().objectAtIndex(i);
 
 				// All artboards
-				for (var j = 0; j < page.artboards().count(); j++) {
+				for (j = 0; j < page.artboards().count(); j++) {
 					var artboard = page.artboards().objectAtIndex(j);
 
 					// All layers inside artboard
 					for (var k = 0; k < artboard.layers().count(); k++) {
-						var layer = artboard.layers().objectAtIndex(k);
+						layer = artboard.layers().objectAtIndex(k);
 
 						checkLayer(layer, options, originalColour);
 					}
 				}
 
 				// All layers inside page
-				for (var j = 0; j < page.layers().count(); j++) {
-					var layer = page.layers().objectAtIndex(j);
+				for (j = 0; j < page.layers().count(); j++) {
+					layer = page.layers().objectAtIndex(j);
 
 					checkLayer(layer, options, originalColour);
 				}
@@ -125,45 +127,38 @@ var onRun = function(context) {
 	 * @return {MSColor}               The selected layer colour
 	 */
 	function getColour(layer, layerProperty) {
-		var colour = null;
+		var colour;
+		var fill;
+		var border;
 
 		if (layerProperty == 'Text') {
 			colour = layer.textColor();
 
 			// If the text layer also has a fill, use this as the primary colour
-			var fill = layer.style().fills().firstObject();
+			fill = layer.style().fills().firstObject();
 
 			if (fill != undefined && fill.isEnabled()) {
 				colour = fill.color();
 			}
 		} else if (layerProperty == 'Fill') {
-			var fill = layer.style().fills().firstObject();
+			fill = layer.style().fills().firstObject();
 
 			if (fill != undefined && fill.isEnabled()) {
 				colour = fill.color();
 			}
 		} else if (layerProperty == 'Border') {
-			var border = layer.style().borders().firstObject();
+			border = layer.style().borders().firstObject();
 
 			if (border != undefined && border.isEnabled()) {
 				colour = border.color();
 			}
 		}
 
-		if (colour != null) {
+		if (colour != undefined) {
 			colour = colour.immutableModelObject();
 		}
 
 		return colour;
-	}
-
-	/**
-	 * Retrieve the layer class of the chosen layer
-	 * @param  {NSLayer} selectedLayer The layer to query
-	 * @return {String}                The type of layer
-	 */
-	function getLayerType(selectedLayer) {
-    	return selectedLayer.class();
 	}
 
 	/**
@@ -172,7 +167,7 @@ var onRun = function(context) {
 	 * @return {NSLayer}               The layer selected, or the first child if a group
 	 */
 	function getSelectedLayer(selectedLayer) {
-		var selectedLayerType = getLayerType(selectedLayer);
+		var selectedLayerType = selectedLayer.class();
 
 		if (selectedLayerType == MSLayerGroup) {
 			return getSelectedLayer(selectedLayer.layers().firstObject());
@@ -278,7 +273,7 @@ var onRun = function(context) {
      * @param  {string} hexColor Hex Colour (with or without #)
      * @return {object}          Converted RGB values.
      */
-    function hexToRgba(hex) {
+    function hexToRgb(hex) {
     	var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
 
 		if (result) {
@@ -286,7 +281,6 @@ var onRun = function(context) {
 	        	r : parseInt(result[1], 16),
 	        	g : parseInt(result[2], 16),
 	        	b : parseInt(result[3], 16),
-				a : 1
 	        };
 		} else {
 			result = null;
@@ -306,7 +300,7 @@ var onRun = function(context) {
 	function setColour(layer, layerType, replacementProperty, replacementColour, originalColour) {
 		var layerColour = getColour(layer, replacementProperty);
 
-		replacementColour = hexToRgba(replacementColour);
+		replacementColour = hexToRgb(replacementColour);
 
 		if (layerColour != undefined && replacementColour != null) {
 			var hexColour = '#' + layerColour.hexValue();
@@ -319,7 +313,7 @@ var onRun = function(context) {
 						var fill = layer.style().fills().firstObject();
 
 						if (fill != undefined) {
-							fill.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r, replacementColour.g, replacementColour.b, replacementColour.a);
+							fill.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
 						}
 					}
 
@@ -327,11 +321,11 @@ var onRun = function(context) {
 						var border = layer.style().borders().firstObject();
 
 						if (border != undefined) {
-							border.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r, replacementColour.g, replacementColour.b, replacementColour.a);
+							border.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
 						}
 					}
 				} else {
-					layer.textColor = MSColor.colorWithRed_green_blue_alpha(replacementColour.r, replacementColour.g, replacementColour.b, replacementColour.a);
+					layer.textColor = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
 				}
 			}
 		}
