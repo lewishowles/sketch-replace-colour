@@ -1,19 +1,20 @@
 var onRun = function(context) {
-	var doc            = context.document;
-	var selectedLayers = context.selection;
-	var selectedCount  = selectedLayers.count();
+	var sketch     = context.document;
+	var selection  = context.selection;
+	var layerCount = selection.count();
 
 	// Plugin requires a selection to determine the starting colour
-	if (selectedCount == 0) {
-		doc.displayMessage('No layer selected');
+	if (layerCount == 0) {
+		sketch.displayMessage('No layer selected');
 	} else {
 		// Options window
-		var selectedLayer     = getSelectedLayer(selectedLayers.firstObject());
+		var selectedLayer     = getSelectedLayer(selection.firstObject());
 		var selectedLayerType = selectedLayer.class();
 		var originalFill      = selectedLayer.style().fills().firstObject();
 		var originalBorder    = selectedLayer.style().borders().firstObject();
-		var alert             = buildDialog(selectedLayer, selectedLayerType);
-    	var options           = handleAlertResponse(alert, alert.runModal(), selectedLayerType, originalFill, originalBorder);
+		var originalShadow    = selectedLayer.style().shadows().firstObject();
+		var alert             = buildDialog(selectedLayer, selectedLayerType, originalFill, originalBorder, originalShadow);
+    	var options           = handleAlertResponse(alert, alert.runModal(), selectedLayerType, originalFill, originalBorder, originalShadow);
 
 		// Colours
 		var colour            = getColour(selectedLayer, options.layerProperty);
@@ -21,13 +22,11 @@ var onRun = function(context) {
 		var replacementColour = options.colour;
 
 		if (replacementColour != undefined) {
-			var i;
-			var j;
-			var layer;
+			var i, j, layer;
 
 			// All pages
-			for (i = 0; i < doc.pages().count(); i++) {
-				var page = doc.pages().objectAtIndex(i);
+			for (i = 0; i < sketch.pages().count(); i++) {
+				var page = sketch.pages().objectAtIndex(i);
 
 				// All artboards
 				for (j = 0; j < page.artboards().count(); j++) {
@@ -53,38 +52,33 @@ var onRun = function(context) {
 
 	/**
 	 * Build dialog window with appropriate options
-	 * @param  {NSLayer}        selectedLayer     The layer selected at run time
-	 * @param  {NSLayer}        selectedLayerType The layer type of the layer selected at run time
-	 * @return {COSAlertWindow}                   The alert window requesting input
+	 * @param   {NSLayer}         selectedLayer      The layer selected at run time
+	 * @param   {NSLayer}         selectedLayerType  The layer type of the layer selected at run time
+	 * @param   {MSStyleFill}     originalFill       The layer's original fill
+	 * @param   {MSStyleBorder}   originalBorder     The layer's original border
+	 * @param   {MSStyleShadow}   originalShadow     The layer's original shadow
+	 * @return  {COSAlertWindow}                     The alert window requesting input
 	 */
-    function buildDialog(selectedLayer, selectedLayerType) {
+    function buildDialog(selectedLayer, selectedLayerType, originalFill, originalBorder, originalShadow) {
     	var alert = COSAlertWindow.new();
 
 		alert.setMessageText('Find & Replace Colour');
 
-		if (selectedLayerType == MSShapeGroup) {
-			// Shape layer
-			if (originalFill != undefined && originalBorder != undefined) {
-				// Only provide the property option if this is a shape and it has both a fill and a border
+		var colourChoices = getColourChoices(originalFill, originalBorder, originalShadow);
+
+		if (colourChoices.length) {
+			if (colourChoices.length == 1) {
+				// Only one possibility
+				colour = getColour(selectedLayer, colourChoices[0]);
+				alert.setInformativeText('You will be replacing the ' + colourChoices[0] + ' colour (#' + colour.hexValue() + ') of this layer.');
+			} else {
+				// Allow user to choose
 				alert.setInformativeText('Select the property containing the colour to replace, enter a replacement colour, and choose which properties to update.');
 
-				var choosePropertyOptions = ['Fill', 'Border'];
-				var choosePropertySelect  = createSelect(choosePropertyOptions, 0);
+				var choosePropertySelect = createSelect(colourChoices, 0);
 
 				alert.addAccessoryView(choosePropertySelect);
-			} else if (originalFill != undefined && originalBorder == undefined) {
-				// Replacing fill
-				colour = getColour(selectedLayer, 'Fill');
-				alert.setInformativeText('You will be replacing the Fill colour (#' + colour.hexValue() + ') of this layer.');
-			} else if (originalFill == undefined && originalBorder != undefined) {
-				// Replacing border
-				colour = getColour(selectedLayer, 'Border');
-				alert.setInformativeText('You will be replacing the Border colour (#' + colour.hexValue() + ') of this layer.');
 			}
-		} else {
-			// Text layer
-			colour = getColour(selectedLayer, 'Text');
-			alert.setInformativeText('You will be replacing the Text colour (#' + colour.hexValue() + ') of this layer.');
 		}
 
 		alert.addTextLabelWithValue('What is your new colour?');
@@ -92,7 +86,7 @@ var onRun = function(context) {
 
 		alert.addTextLabelWithValue('What should we update on other layers?');
 
-		var propertyOptions = ['All', 'Fill', 'Border', 'Text'];
+		var propertyOptions = ['All', 'Fill', 'Border', 'Text', 'Shadow'];
 		var propertySelect  = createSelect(propertyOptions, 0);
 		alert.addAccessoryView(propertySelect);
 
@@ -101,6 +95,38 @@ var onRun = function(context) {
 
 		return alert;
     }
+
+	/**
+	 * Retrieve an array of colour choices given the selected layer's state
+	 * @param   {MSStyleFill}    originalFill    The layer's original fill
+	 * @param   {MSStyleBorder}  originalBorder  The layer's original border
+	 * @param   {MSStyleShadow}  originalShadow  The layer's original shadow
+	 * @return  {array}                          The possible colour choices
+	 */
+	function getColourChoices(originalFill, originalBorder, originalShadow) {
+		var colourChoices = [];
+
+		if (selectedLayerType == 'MSShapeGroup') {
+			// Shape layer
+			if (originalFill != undefined) {
+				colourChoices.push('Fill');
+			}
+
+			if (originalBorder != undefined) {
+				colourChoices.push('Border');
+			}
+		} else {
+			// Text layers always have a colour
+			colourChoices.push('Text');
+		}
+
+		// Shadow applies to both types of layer
+		if (originalShadow != undefined) {
+			colourChoices.push('Shadow');
+		}
+
+		return colourChoices;
+	}
 
 	/**
 	 * Create Select Box for dialog windows
@@ -130,6 +156,7 @@ var onRun = function(context) {
 		var colour;
 		var fill;
 		var border;
+		var shadow;
 
 		if (layerProperty == 'Text') {
 			colour = layer.textColor();
@@ -151,6 +178,12 @@ var onRun = function(context) {
 
 			if (border != undefined && border.isEnabled()) {
 				colour = border.color();
+			}
+		} else if (layerProperty == 'Shadow') {
+			shadow = layer.style().shadows().firstObject();
+
+			if (shadow != undefined && shadow.isEnabled()) {
+				colour = shadow.color();
 			}
 		}
 
@@ -178,62 +211,43 @@ var onRun = function(context) {
 
 	/**
 	 * Collect user input from alert window
-	 * @param  {COSAlertWindow} alert             The alert window
-	 * @param  {Int}            responseCode      Alert window response code
-	 * @param  {String}         selectedLayerType Class of the originally selected layer
-	 * @return {Object}                           Alert window results
+	 * @param   {COSAlertWindow}  alert              The alert window
+	 * @param   {Int}             responseCode       Alert window response code
+	 * @param   {String}          selectedLayerType  Class of the originally selected layer
+	 * @param   {MSStyleFill}     originalFill       The layer's original fill
+	 * @param   {MSStyleBorder}   originalBorder     The layer's original border
+	 * @param   {MSStyleShadow}   originalShadow     The layer's original shadow
+	 * @return  {Object}                             Alert window results
 	 */
-	function handleAlertResponse(alert, responseCode, selectedLayerType, originalFill, originalBorder) {
-	    if (responseCode == "1000") {
-			if (selectedLayerType == MSShapeGroup) {
-				// Shape layer
-				if (originalFill != undefined && originalBorder != undefined) {
-					// 0 = Property Select
-					// 1 = Label
-					// 2 = Text Input
-					// 3 = Label
-					// 4 = Property Select
-			        return {
-			        	layerProperty       : alert.viewAtIndex(0).i18nObjectValues[alert.viewAtIndex(0).indexOfSelectedItem()],
-			        	colour              : alert.viewAtIndex(2).stringValue(),
-			        	replacementProperty : alert.viewAtIndex(4).i18nObjectValues[alert.viewAtIndex(4).indexOfSelectedItem()]
-			        };
-				} else if (originalFill != undefined && originalBorder == undefined) {
-					// 0 = Label
-					// 1 = Text Input
-					// 2 = Label
-					// 3 = Property Select
-			        return {
-			        	layerProperty       : 'Fill',
-			        	colour              : alert.viewAtIndex(1).stringValue(),
-						replacementProperty : alert.viewAtIndex(3).i18nObjectValues[alert.viewAtIndex(3).indexOfSelectedItem()]
-			        };
-				} else if (originalFill == undefined && originalBorder != undefined) {
-					// 0 = Label
-					// 1 = Text Input
-					// 2 = Label
-					// 3 = Property Select
-			        return {
-			        	layerProperty       : 'Border',
-			        	colour              : alert.viewAtIndex(1).stringValue(),
-			        	replacementProperty : alert.viewAtIndex(3).i18nObjectValues[alert.viewAtIndex(3).indexOfSelectedItem()]
-			        };
-				}
-			} else {
-				// Text layer
+	function handleAlertResponse(alert, responseCode, selectedLayerType, originalFill, originalBorder, originalShadow) {
+		if (responseCode == "1000") {
+			var colourChoices = getColourChoices(originalFill, originalBorder, originalShadow);
+
+			if (colourChoices.length == 1) {
 				// 0 = Label
 				// 1 = Text Input
 				// 2 = Label
 				// 3 = Property Select
 				return {
-					layerProperty       : 'Text',
-		        	colour              : alert.viewAtIndex(1).stringValue(),
-		        	replacementProperty : alert.viewAtIndex(3).i18nObjectValues[alert.viewAtIndex(3).indexOfSelectedItem()]
-		        };
+					layerProperty       : colourChoices[0],
+					colour              : alert.viewAtIndex(1).stringValue(),
+					replacementProperty : alert.viewAtIndex(3).i18nObjectValues[alert.viewAtIndex(3).indexOfSelectedItem()]
+				};
+			} else {
+				// 0 = Property Select
+				// 1 = Label
+				// 2 = Text Input
+				// 3 = Label
+				// 4 = Property Select
+				return {
+					layerProperty       : alert.viewAtIndex(0).i18nObjectValues[alert.viewAtIndex(0).indexOfSelectedItem()],
+					colour              : alert.viewAtIndex(2).stringValue(),
+					replacementProperty : alert.viewAtIndex(4).i18nObjectValues[alert.viewAtIndex(4).indexOfSelectedItem()]
+				};
 			}
-	    }
+		}
 
-    	return null;
+		return null;
     }
 
 	/**
@@ -264,6 +278,11 @@ var onRun = function(context) {
 			} else if (layerType == MSTextLayer && (replacementProperty == 'Text' || replacementProperty == 'All')) {
 				// Set text colour
 				setColour(layer, layerType, 'Text', replacementColour, originalColour);
+			}
+
+			if (replacementProperty == 'Shadow' || replacementProperty == 'All') {
+				// Set shadow
+				setColour(layer, layerType, 'Shadow', replacementColour, originalColour);
 			}
 		}
 	}
@@ -326,6 +345,15 @@ var onRun = function(context) {
 					}
 				} else {
 					layer.textColor = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
+				}
+
+				// Text shadow
+				if (replacementProperty == 'Shadow') {
+					var shadow = layer.style().shadows().firstObject();
+
+					if (shadow != undefined) {
+						shadow.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
+					}
 				}
 			}
 		}
