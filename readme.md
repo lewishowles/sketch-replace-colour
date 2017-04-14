@@ -4,6 +4,12 @@ Sketch Replace Colour is a plugin to Find and Replace Fill, Border and Text colo
 
 By selecting a layer and running Replace Colour `(Ctrl + Shift + R)` on a selected layer, you will be presented with one of four dialogues.
 
+## New! You can now replace hues to change families of colour in one go
+
+When selecting Hue, you can either enter a Hex value, the hue of which will be extracted, or a hue value directly.
+
+![Sketch Replace Colour showing new Hue options](/ReplaceColour.sketchplugin/Contents/Resources/hue.png?raw=true)
+
 ## Fill only
 
 If the layer only has a fill colour specified, the popup asks for a replacement, and which properties you'd like to update on all other layers `(All, Fill, Border, Text or Shadow)`.

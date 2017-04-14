@@ -81,7 +81,7 @@ var onRun = function(context) {
 			}
 		}
 
-		alert.addTextLabelWithValue('What is your new colour?');
+		alert.addTextLabelWithValue('New colour (Hex or Hue if Hue selected)');
 		alert.addTextFieldWithValue('#');
 
 		alert.addTextLabelWithValue('What should we update on other layers?');
@@ -90,7 +90,7 @@ var onRun = function(context) {
 		var propertySelect  = createSelect(propertyOptions, 0);
 		alert.addAccessoryView(propertySelect);
 
-		alert.addTextLabelWithValue('Would you like to replace the colour, or the hue?');
+		alert.addTextLabelWithValue('Would you like to replace the Colour, or the Hue?');
 
 		var colourOptions = ['Colour', 'Hue'];
 		var colourSelect  = createSelect(colourOptions, 0);
@@ -331,15 +331,27 @@ var onRun = function(context) {
 	 * @param {string}      replaceHue          Whether to replace Hue, rather than colour
 	 */
 	function setColour(layer, layerType, replacementProperty, replacementColour, originalColour, replaceHue) {
-		var layerColour = getColour(layer, replacementProperty);
+		var layerColour      = getColour(layer, replacementProperty);
+		var replacementIsHue = false;
+		var hue;
 
-		replacementColour = hexToRgb(replacementColour);
+		if (replacementColour.indexOf('#') == -1) {
+			// Replacement is a hue value from 0 to 360
+			replacementIsHue = true;
+		} else {
+			replacementColour = hexToRgb(replacementColour);
+		}
 
 		if (layerColour != undefined && replacementColour != null) {
 			var hexColour = '#' + layerColour.hexValue();
 
 			// Convert to MSColor
-			var replacementRGB = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
+			if (replacementIsHue) {
+				hue = replacementColour / 360;
+			} else {
+				var replacementRGB = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
+				hue = replacementRGB.hue();
+			}
 
 			if ((replaceHue && matchingHue(hexColour, originalColour)) || hexColour == originalColour) {
 				// Matching item to update
@@ -350,7 +362,8 @@ var onRun = function(context) {
 
 						if (fill != undefined) {
 							if (replaceHue) {
-								fill.color = getHueAdjustedColour(fill.color(), replacementRGB.hue());
+								log(getHueAdjustedColour(fill.color(), hue));
+								fill.color = getHueAdjustedColour(fill.color(), hue);
 							} else {
 								fill.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
 							}
@@ -362,18 +375,18 @@ var onRun = function(context) {
 
 						if (border != undefined) {
 							if (replaceHue) {
-								replacementColour = getHueAdjustedColour(border.color(), replacementRGB.hue());
+								border.color = getHueAdjustedColour(border.color(), hue);
+							} else {
+								border.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
 							}
-
-							border.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
 						}
 					}
 				} else {
 					if (replaceHue) {
-						replacementColour = getHueAdjustedColour(layer.textColor(), replacementRGB.hue());
+						layer.textColor = getHueAdjustedColour(layer.textColor(), hue);
+					} else {
+						layer.textColor = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
 					}
-
-					layer.textColor = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
 				}
 
 				// Text shadow
@@ -382,10 +395,10 @@ var onRun = function(context) {
 
 					if (shadow != undefined) {
 						if (replaceHue) {
-							replacementColour = getHueAdjustedColour(shadow.color(), replacementRGB.hue());
+							shadow.color = getHueAdjustedColour(shadow.color(), hue);
+						} else {
+							shadow.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
 						}
-
-						shadow.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
 					}
 				}
 			}
