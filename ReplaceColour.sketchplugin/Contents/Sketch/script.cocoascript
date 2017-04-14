@@ -90,6 +90,12 @@ var onRun = function(context) {
 		var propertySelect  = createSelect(propertyOptions, 0);
 		alert.addAccessoryView(propertySelect);
 
+		alert.addTextLabelWithValue('Would you like to replace the colour, or the hue?');
+
+		var colourOptions = ['Colour', 'Hue'];
+		var colourSelect  = createSelect(colourOptions, 0);
+		alert.addAccessoryView(colourSelect);
+
 		alert.addButtonWithTitle('OK');
 		alert.addButtonWithTitle('Cancel');
 
@@ -228,10 +234,13 @@ var onRun = function(context) {
 				// 1 = Text Input
 				// 2 = Label
 				// 3 = Property Select
+				// 4 = Label
+				// 5 = Hue Select
 				return {
 					layerProperty       : colourChoices[0],
 					colour              : alert.viewAtIndex(1).stringValue(),
-					replacementProperty : alert.viewAtIndex(3).i18nObjectValues[alert.viewAtIndex(3).indexOfSelectedItem()]
+					replacementProperty : alert.viewAtIndex(3).i18nObjectValues[alert.viewAtIndex(3).indexOfSelectedItem()],
+					replaceHue          : alert.viewAtIndex(5).i18nObjectValues[alert.viewAtIndex(5).indexOfSelectedItem()],
 				};
 			} else {
 				// 0 = Property Select
@@ -239,10 +248,13 @@ var onRun = function(context) {
 				// 2 = Text Input
 				// 3 = Label
 				// 4 = Property Select
+				// 5 = Label
+				// 6 = Hue Select
 				return {
 					layerProperty       : alert.viewAtIndex(0).i18nObjectValues[alert.viewAtIndex(0).indexOfSelectedItem()],
 					colour              : alert.viewAtIndex(2).stringValue(),
-					replacementProperty : alert.viewAtIndex(4).i18nObjectValues[alert.viewAtIndex(4).indexOfSelectedItem()]
+					replacementProperty : alert.viewAtIndex(4).i18nObjectValues[alert.viewAtIndex(4).indexOfSelectedItem()],
+					replaceHue          : alert.viewAtIndex(6).i18nObjectValues[alert.viewAtIndex(6).indexOfSelectedItem()],
 				};
 			}
 		}
@@ -258,6 +270,7 @@ var onRun = function(context) {
 	function checkLayer(layer, options, originalColour) {
 		var layerType           = layer.class();
 		var replacementProperty = options.replacementProperty;
+		var replaceHue          = options.replaceHue == 'Hue';
 
 		if (layerType == MSLayerGroup) {
 			// Apply to all layers in a group
@@ -268,21 +281,21 @@ var onRun = function(context) {
 			if (layerType == MSShapeGroup) {
 				// Set fill
 				if (replacementProperty == 'Fill' || replacementProperty == 'All') {
-					setColour(layer, layerType, 'Fill', replacementColour, originalColour);
+					setColour(layer, layerType, 'Fill', replacementColour, originalColour, replaceHue);
 				}
 
 				// Set border
 				if (replacementProperty == 'Border' || replacementProperty == 'All') {
-					setColour(layer, layerType, 'Border', replacementColour, originalColour);
+					setColour(layer, layerType, 'Border', replacementColour, originalColour, replaceHue);
 				}
 			} else if (layerType == MSTextLayer && (replacementProperty == 'Text' || replacementProperty == 'All')) {
 				// Set text colour
-				setColour(layer, layerType, 'Text', replacementColour, originalColour);
+				setColour(layer, layerType, 'Text', replacementColour, originalColour, replaceHue);
 			}
 
-			if (replacementProperty == 'Shadow' || replacementProperty == 'All') {
+			if (layerType != MSSliceLayer && (replacementProperty == 'Shadow' || replacementProperty == 'All')) {
 				// Set shadow
-				setColour(layer, layerType, 'Shadow', replacementColour, originalColour);
+				setColour(layer, layerType, 'Shadow', replacementColour, originalColour, replaceHue);
 			}
 		}
 	}
@@ -315,8 +328,9 @@ var onRun = function(context) {
 	 * @param {string}      replacementProperty The property to replace
 	 * @param {string}      replacementColour   The new colour to use
 	 * @param {string}      originalColour      The original colour to replace
+	 * @param {string}      replaceHue          Whether to replace Hue, rather than colour
 	 */
-	function setColour(layer, layerType, replacementProperty, replacementColour, originalColour) {
+	function setColour(layer, layerType, replacementProperty, replacementColour, originalColour, replaceHue) {
 		var layerColour = getColour(layer, replacementProperty);
 
 		replacementColour = hexToRgb(replacementColour);
@@ -324,7 +338,10 @@ var onRun = function(context) {
 		if (layerColour != undefined && replacementColour != null) {
 			var hexColour = '#' + layerColour.hexValue();
 
-			if (hexColour == originalColour) {
+			// Convert to MSColor
+			var replacementRGB = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
+
+			if ((replaceHue && matchingHue(hexColour, originalColour)) || hexColour == originalColour) {
 				// Matching item to update
 				if (layerType == MSShapeGroup) {
 					// Shape
@@ -332,7 +349,11 @@ var onRun = function(context) {
 						var fill = layer.style().fills().firstObject();
 
 						if (fill != undefined) {
-							fill.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
+							if (replaceHue) {
+								fill.color = getHueAdjustedColour(fill.color(), replacementRGB.hue());
+							} else {
+								fill.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
+							}
 						}
 					}
 
@@ -340,10 +361,18 @@ var onRun = function(context) {
 						var border = layer.style().borders().firstObject();
 
 						if (border != undefined) {
+							if (replaceHue) {
+								replacementColour = getHueAdjustedColour(border.color(), replacementRGB.hue());
+							}
+
 							border.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
 						}
 					}
 				} else {
+					if (replaceHue) {
+						replacementColour = getHueAdjustedColour(layer.textColor(), replacementRGB.hue());
+					}
+
 					layer.textColor = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
 				}
 
@@ -352,10 +381,48 @@ var onRun = function(context) {
 					var shadow = layer.style().shadows().firstObject();
 
 					if (shadow != undefined) {
+						if (replaceHue) {
+							replacementColour = getHueAdjustedColour(shadow.color(), replacementRGB.hue());
+						}
+
 						shadow.color = MSColor.colorWithRed_green_blue_alpha(replacementColour.r / 255, replacementColour.g / 255, replacementColour.b / 255, 1.0);
 					}
 				}
 			}
 		}
+	}
+
+	/**
+	 * Determine if two colours share the same hue, within a given threshold
+	 * @param   {string}   colourOne  Hex value for colour one
+	 * @param   {string}   colourTwo  Hex value for colour two
+	 * @return  {Boolean}             Whether the hue of the two colours matches
+	 */
+	function matchingHue(colourOne, colourTwo) {
+		var colourOneRGB = hexToRgb(colourOne);
+		var colourTwoRGB = hexToRgb(colourTwo);
+
+		// Convert to MSColors
+		colourOne  = MSColor.colorWithRed_green_blue_alpha(colourOneRGB.r / 255, colourOneRGB.g / 255, colourOneRGB.b / 255, 1.0);
+		colourTwo  = MSColor.colorWithRed_green_blue_alpha(colourTwoRGB.r / 255, colourTwoRGB.g / 255, colourTwoRGB.b / 255, 1.0);
+
+		var threshold  = 0.005;
+		var difference = colourOne.hue() - colourTwo.hue();
+
+		if (Math.abs(difference) < Math.abs(threshold)) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Convert a colour with a new hue
+	 * @param   {MSColor}  layerColour  Current layer colour
+	 * @param   {object}   hue          New Hue
+	 * @return  {MSColor}               Hue adjusted colour
+	 */
+	function getHueAdjustedColour(layerColour, hue) {
+		return MSColor.colorWithHue_saturation_brightness_alpha(hue, layerColour.saturation(), layerColour.brightness(), layerColour.alpha());
 	}
 };
